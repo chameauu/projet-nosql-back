@@ -14,7 +14,7 @@ sys.path.insert(0, str(project_root))
 
 from app import create_app
 from src.models import db, User
-from src.services.postgres_telemetry import PostgresTelemetryService
+# PostgreSQL telemetry service removed - using Cassandra instead
 from werkzeug.security import generate_password_hash
 from sqlalchemy import text
 
@@ -32,10 +32,8 @@ def init_database():
             db.create_all()
             print("   ✓ All tables created successfully")
             
-            print("\n2. Creating telemetry_data table...")
-            telemetry_service = PostgresTelemetryService()
-            # Table is created automatically in __init__
-            print("   ✓ Telemetry table created")
+            print("\n2. Skipping telemetry_data table (using Cassandra)...")
+            print("   ✓ Telemetry data now stored in Cassandra for better performance")
             
             print("\n3. Creating admin user...")
             admin_user = User.query.filter_by(username="admin").first()
@@ -70,12 +68,13 @@ def init_database():
             print("\n" + "="*60)
             print("✓ Database initialization completed successfully!")
             print("="*60)
-            print("\nDatabase Schema:")
+            print("\nDatabase Schema (PostgreSQL):")
             print("  - users: User accounts and authentication")
             print("  - devices: IoT devices registered to users")
             print("  - device_groups: Groups for organizing devices")
             print("  - device_group_members: Device-to-group relationships")
-            print("  - telemetry_data: Time-series telemetry data")
+            print("\nTelemetry Data:")
+            print("  - Stored in Cassandra for high-performance time-series operations")
             print("\nUser Credentials:")
             print("  - admin / admin123 (admin)")
             print("  - testuser / test123 (regular user)")
