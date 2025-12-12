@@ -284,9 +284,175 @@ class IoTFlowSimulation:
             print_error(f"Failed to get historical telemetry: {response.text}")
             return False
     
-    def step_8_check_device_status(self):
-        """Step 8: Check device status (Redis + PostgreSQL)"""
-        print_header("STEP 8: Device Status Check")
+    def step_8_create_alerts(self):
+        """Step 8: Create alerts in MongoDB using direct shell commands"""
+        print_header("STEP 8: Alert Generation (MongoDB)")
+        
+        print_info("Creating various types of alerts in MongoDB...")
+        
+        import subprocess
+        import json
+        
+        # Create alert documents using MongoDB shell
+        alert_templates = [
+            {
+                "device_id": self.devices[0]['id'],
+                "user_id": 5,  # Current simulation user ID
+                "alert_type": "threshold_exceeded",
+                "severity": "warning",
+                "status": "active",
+                "message": f"Temperature threshold exceeded on {self.devices[0]['name']}",
+                "details": {
+                    "threshold": 30.0,
+                    "current_value": 32.5,
+                    "measurement": "temperature",
+                    "location": self.devices[0]['location']
+                },
+                "acknowledged": False,
+                "created_at": datetime.now().isoformat()
+            },
+            {
+                "device_id": self.devices[1]['id'],
+                "user_id": 5,
+                "alert_type": "device_offline",
+                "severity": "error",
+                "status": "active",
+                "message": f"Device {self.devices[1]['name']} has gone offline",
+                "details": {
+                    "last_seen": datetime.now().isoformat(),
+                    "expected_interval": 60,
+                    "location": self.devices[1]['location']
+                },
+                "acknowledged": False,
+                "created_at": datetime.now().isoformat()
+            },
+            {
+                "device_id": self.devices[2]['id'],
+                "user_id": 5,
+                "alert_type": "anomaly",
+                "severity": "critical",
+                "status": "active",
+                "message": f"Anomalous readings detected on {self.devices[2]['name']}",
+                "details": {
+                    "anomaly_score": 0.95,
+                    "measurements_affected": ["humidity", "pressure"],
+                    "detection_method": "statistical_outlier",
+                    "location": self.devices[2]['location']
+                },
+                "acknowledged": False,
+                "created_at": datetime.now().isoformat()
+            },
+            {
+                "device_id": self.devices[3]['id'],
+                "user_id": 5,
+                "alert_type": "maintenance",
+                "severity": "info",
+                "status": "active",
+                "message": f"Scheduled maintenance required for {self.devices[3]['name']}",
+                "details": {
+                    "maintenance_type": "firmware_update",
+                    "scheduled_date": (datetime.now() + timedelta(days=7)).isoformat(),
+                    "estimated_downtime": "30 minutes",
+                    "location": self.devices[3]['location']
+                },
+                "acknowledged": False,
+                "created_at": datetime.now().isoformat()
+            },
+            {
+                "device_id": self.devices[4]['id'],
+                "user_id": 5,
+                "alert_type": "custom",
+                "severity": "warning",
+                "status": "resolved",
+                "message": f"Battery level low on {self.devices[4]['name']}",
+                "details": {
+                    "battery_level": 15,
+                    "threshold": 20,
+                    "estimated_remaining": "2 hours",
+                    "location": self.devices[4]['location']
+                },
+                "acknowledged": True,
+                "resolved_at": datetime.now().isoformat(),
+                "created_at": datetime.now().isoformat()
+            }
+        ]
+        
+        created_alerts = 0
+        
+        try:
+            for i, alert_data in enumerate(alert_templates):
+                # Create MongoDB-compatible insert command with proper data types
+                details_json = json.dumps(alert_data['details'])
+                resolved_at_part = ""
+                if alert_data.get('resolved_at'):
+                    resolved_at_part = f", resolved_at: new Date('{alert_data['resolved_at']}')"
+                
+                mongo_command = f"""
+                use iotflow;
+                db.alerts.insertOne({{
+                    device_id: NumberInt({alert_data['device_id']}),
+                    user_id: NumberInt({alert_data['user_id']}),
+                    alert_type: '{alert_data['alert_type']}',
+                    severity: '{alert_data['severity']}',
+                    status: '{alert_data['status']}',
+                    message: '{alert_data['message']}',
+                    details: {details_json},
+                    acknowledged: {str(alert_data['acknowledged']).lower()},
+                    created_at: new Date('{alert_data['created_at']}'){resolved_at_part}
+                }});
+                """
+                
+                # Execute MongoDB command
+                result = subprocess.run([
+                    'docker', 'exec', 'iotflow_mongodb', 'mongosh', 
+                    '-u', 'iotflow', '-p', 'iotflowpass', 
+                    '--authenticationDatabase', 'admin',
+                    '--eval', mongo_command
+                ], capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    created_alerts += 1
+                    severity_color = {
+                        'info': Fore.BLUE,
+                        'warning': Fore.YELLOW,
+                        'error': Fore.RED,
+                        'critical': Fore.MAGENTA
+                    }.get(alert_data['severity'], Fore.WHITE)
+                    
+                    print_success(f"Alert created: {alert_data['alert_type']} ({severity_color}{alert_data['severity']}{Style.RESET_ALL})")
+                    print_database("MongoDB", f"Alert stored in alerts collection")
+                else:
+                    print_error(f"Failed to create alert: {alert_data['alert_type']}")
+            
+            print(f"\n{Fore.WHITE}Alert Summary:{Style.RESET_ALL}")
+            print(f"  Total alerts created: {created_alerts}")
+            print(f"  Active alerts: {sum(1 for a in alert_templates if a['status'] == 'active')}")
+            print(f"  Resolved alerts: {sum(1 for a in alert_templates if a['status'] == 'resolved')}")
+            print(f"  Severity breakdown:")
+            
+            severity_counts = {}
+            for alert in alert_templates:
+                severity = alert['severity']
+                severity_counts[severity] = severity_counts.get(severity, 0) + 1
+            
+            for severity, count in severity_counts.items():
+                severity_color = {
+                    'info': Fore.BLUE,
+                    'warning': Fore.YELLOW,
+                    'error': Fore.RED,
+                    'critical': Fore.MAGENTA
+                }.get(severity, Fore.WHITE)
+                print(f"    - {severity_color}{severity.capitalize()}{Style.RESET_ALL}: {count}")
+            
+            return created_alerts > 0
+            
+        except Exception as e:
+            print_error(f"Error creating alerts: {e}")
+            return False
+    
+    def step_9_check_device_status(self):
+        """Step 9: Check device status (Redis + PostgreSQL)"""
+        print_header("STEP 9: Device Status Check")
         
         print_info("Checking device online status...")
         
@@ -314,9 +480,9 @@ class IoTFlowSimulation:
         
         return True
     
-    def step_9_system_health_check(self):
-        """Step 9: System health check (All databases)"""
-        print_header("STEP 9: System Health Check")
+    def step_10_system_health_check(self):
+        """Step 10: System health check (All databases)"""
+        print_header("STEP 10: System Health Check")
         
         print_info("Checking system health and database status...")
         
@@ -342,9 +508,9 @@ class IoTFlowSimulation:
             print_error(f"Health check failed: {response.text}")
             return False
     
-    def step_10_performance_summary(self):
-        """Step 10: Performance summary"""
-        print_header("STEP 10: Performance Summary")
+    def step_11_performance_summary(self):
+        """Step 11: Performance summary"""
+        print_header("STEP 11: Performance Summary")
         
         print(f"{Fore.WHITE}NoSQL Integration Performance:{Style.RESET_ALL}\n")
         
@@ -355,6 +521,7 @@ class IoTFlowSimulation:
             ("Historical Query (1h)", "~30ms", "Cassandra"),
             ("Device Status (cached)", "~1ms", "Redis"),
             ("API Key Validation", "~1ms", "Redis"),
+            ("Alert Creation", "~5ms", "MongoDB"),
         ]
         
         for operation, latency, databases in performance_data:
@@ -364,6 +531,7 @@ class IoTFlowSimulation:
         benefits = [
             "5x faster telemetry writes",
             "20x faster cached reads",
+            "Real-time alert generation",
             "Horizontal scalability",
             "High availability",
             "No single point of failure"
@@ -391,9 +559,10 @@ class IoTFlowSimulation:
             self.step_5_submit_telemetry,
             self.step_6_query_latest_telemetry,
             self.step_7_query_historical_telemetry,
-            self.step_8_check_device_status,
-            self.step_9_system_health_check,
-            self.step_10_performance_summary
+            self.step_8_create_alerts,
+            self.step_9_check_device_status,
+            self.step_10_system_health_check,
+            self.step_11_performance_summary
         ]
         
         for i, step in enumerate(steps, 1):
@@ -406,13 +575,97 @@ class IoTFlowSimulation:
                 import traceback
                 traceback.print_exc()
         
+        # Final MongoDB verification
+        self.verify_mongodb_data()
+        
         print_header("Simulation Complete!")
         print(f"{Fore.GREEN}All NoSQL databases have been demonstrated successfully!{Style.RESET_ALL}")
         print(f"\n{Fore.WHITE}Next steps:{Style.RESET_ALL}")
-        print("  1. Check MongoDB for event logs")
+        print("  1. Check MongoDB for event logs and alerts")
         print("  2. Query Cassandra for time-series data")
         print("  3. Monitor Redis cache hit rates")
         print("  4. Review PostgreSQL for user/device data")
+    
+    def verify_mongodb_data(self):
+        """Verify MongoDB data after simulation using shell commands"""
+        print_header("MongoDB Data Verification")
+        
+        print_info("Verifying created data in MongoDB...")
+        
+        import subprocess
+        
+        try:
+            # Check alerts count
+            result = subprocess.run([
+                'docker', 'exec', 'iotflow_mongodb', 'mongosh', 
+                '-u', 'iotflow', '-p', 'iotflowpass', 
+                '--authenticationDatabase', 'admin',
+                '--eval', 'use iotflow; db.alerts.countDocuments()'
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                # Extract count from output (last line usually contains the number)
+                lines = result.stdout.strip().split('\n')
+                alert_count = 0
+                for line in reversed(lines):
+                    if line.strip().isdigit():
+                        alert_count = int(line.strip())
+                        break
+                
+                print_success(f"Total alerts in MongoDB: {alert_count}")
+                
+                # Get sample alerts
+                sample_result = subprocess.run([
+                    'docker', 'exec', 'iotflow_mongodb', 'mongosh', 
+                    '-u', 'iotflow', '-p', 'iotflowpass', 
+                    '--authenticationDatabase', 'admin',
+                    '--eval', '''
+                    use iotflow; 
+                    db.alerts.find({}, {alert_type: 1, severity: 1, message: 1}).limit(3).forEach(function(doc) {
+                        print(doc.alert_type + " (" + doc.severity + "): " + doc.message);
+                    });
+                    '''
+                ], capture_output=True, text=True)
+                
+                if sample_result.returncode == 0 and alert_count > 0:
+                    print(f"\n{Fore.WHITE}Sample Alerts:{Style.RESET_ALL}")
+                    lines = sample_result.stdout.strip().split('\n')
+                    for line in lines:
+                        if ':' in line and ('warning' in line or 'error' in line or 'critical' in line or 'info' in line):
+                            severity_color = Fore.WHITE
+                            if 'warning' in line:
+                                severity_color = Fore.YELLOW
+                            elif 'error' in line:
+                                severity_color = Fore.RED
+                            elif 'critical' in line:
+                                severity_color = Fore.MAGENTA
+                            elif 'info' in line:
+                                severity_color = Fore.BLUE
+                            
+                            print(f"  {severity_color}• {line.strip()}{Style.RESET_ALL}")
+            
+            # Check event logs count
+            event_result = subprocess.run([
+                'docker', 'exec', 'iotflow_mongodb', 'mongosh', 
+                '-u', 'iotflow', '-p', 'iotflowpass', 
+                '--authenticationDatabase', 'admin',
+                '--eval', 'use iotflow; db.event_logs.countDocuments()'
+            ], capture_output=True, text=True)
+            
+            if event_result.returncode == 0:
+                lines = event_result.stdout.strip().split('\n')
+                event_count = 0
+                for line in reversed(lines):
+                    if line.strip().isdigit():
+                        event_count = int(line.strip())
+                        break
+                
+                print_success(f"Total events in MongoDB: {event_count}")
+            
+            print_database("MongoDB", f"Verification complete - {alert_count} alerts, {event_count} events")
+            
+        except Exception as e:
+            print_error(f"MongoDB verification failed: {e}")
 
 
 if __name__ == "__main__":

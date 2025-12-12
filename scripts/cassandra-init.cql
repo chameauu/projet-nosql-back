@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS device_measurements (
     unit text,
     first_seen timestamp,
     last_seen timestamp,
-    sample_count counter,
+    sample_count bigint,
     PRIMARY KEY (device_id, measurement_name)
 ) WITH comment = 'Catalog of measurements reported by each device';
 
