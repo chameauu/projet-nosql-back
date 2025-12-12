@@ -3,7 +3,7 @@ User management routes
 """
 
 from flask import Blueprint, request, jsonify, current_app
-from src.models import User, db
+from src.models import User, Device, db
 from src.middleware.auth import require_admin_token
 from src.middleware.security import security_headers_middleware
 from datetime import datetime, timezone
@@ -350,7 +350,18 @@ def delete_user(user_id):
         username = user.username
         
         # Hard delete - permanently remove from database
-        # Note: Associated devices will be deleted due to CASCADE foreign key
+        # First, manually delete device group memberships to avoid constraint issues
+        from src.models import DeviceGroupMember
+        
+        # Get all devices belonging to this user
+        user_devices = Device.query.filter_by(user_id=user.id).all()
+        device_ids = [device.id for device in user_devices]
+        
+        # Delete all device group memberships for these devices
+        if device_ids:
+            DeviceGroupMember.query.filter(DeviceGroupMember.device_id.in_(device_ids)).delete(synchronize_session=False)
+        
+        # Now delete the user (devices will be deleted due to CASCADE foreign key)
         db.session.delete(user)
         db.session.commit()
         
