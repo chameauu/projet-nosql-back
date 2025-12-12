@@ -170,10 +170,10 @@ All three NoSQL services are **production-ready**!
 ```bash
 $ docker compose ps
 NAME                IMAGE            STATUS
-iotflow_cassandra   cassandra:4.1    Up (healthy)
-iotflow_mongodb     mongo:7.0        Up (healthy)
-iotflow_postgres    postgres:15      Up (healthy)
-iotflow_redis       redis:7-alpine   Up (healthy)
+iotflow_cassandra        cassandra:4.1    Up (healthy)
+iotflow_mongodb          mongo:7.0        Up (healthy)
+iotflow_postgres_nosql   postgres:15      Up (healthy)
+iotflow_redis            redis:7-alpine   Up (healthy)
 ```
 
 All databases are running and healthy! ✅

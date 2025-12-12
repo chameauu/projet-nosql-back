@@ -49,10 +49,10 @@ docker compose ps
 Expected output:
 ```
 NAME                STATUS
-iotflow_cassandra   Up (healthy)
-iotflow_mongodb     Up (healthy)
-iotflow_postgres    Up (healthy)
-iotflow_redis       Up (healthy)
+iotflow_cassandra        Up (healthy)
+iotflow_mongodb          Up (healthy)
+iotflow_postgres_nosql   Up (healthy)
+iotflow_redis            Up (healthy)
 ```
 
 ### 3. Run Tests

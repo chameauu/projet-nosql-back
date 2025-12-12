@@ -4,7 +4,7 @@ services:
   # PostgreSQL - Relational data (users, devices, groups)
   postgres:
     image: postgres:15
-    container_name: iotflow_postgres
+    container_name: iotflow_postgres_nosql
     environment:
       POSTGRES_USER: iotflow
       POSTGRES_PASSWORD: iotflowpass
