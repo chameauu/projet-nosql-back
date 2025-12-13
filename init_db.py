@@ -40,7 +40,7 @@ def init_database():
             if not admin_user:
                 admin_user = User(
                     username="admin",
-                    email="admin@iotflow.local",
+                    email="admin@smartsense.local",
                     is_admin=True
                 )
                 admin_user.set_password("admin123")
@@ -55,7 +55,7 @@ def init_database():
             if not test_user:
                 test_user = User(
                     username="testuser",
-                    email="test@iotflow.local",
+                    email="test@smartsense.local",
                     is_admin=False
                 )
                 test_user.set_password("test123")

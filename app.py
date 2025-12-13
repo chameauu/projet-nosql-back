@@ -76,12 +76,12 @@ def create_app(config_name=None):
     swagger_template = {
         "swagger": "2.0",
         "info": {
-            "title": "IoTFlow Connectivity Layer API",
+            "title": "SmartSense Connectivity Layer API",
             "description": "REST API for IoT device connectivity and telemetry data management",
             "version": "1.0.0",
             "contact": {
-                "name": "IoTFlow Team",
-                "url": "https://github.com/IoT-Flow/Connectivity-Layer"
+                "name": "SmartSense Team",
+                "url": "https://github.com/SmartSense/Connectivity-Layer"
             }
         },
         "host": "localhost:5000",
@@ -158,7 +158,7 @@ def create_app(config_name=None):
         else:
             return jsonify({
                 'status': 'healthy',
-                'message': 'IoT Connectivity Layer is running',
+                'message': 'SmartSense Connectivity Layer is running',
                 'version': '1.0.0'
             }), 200
     
@@ -183,7 +183,7 @@ def create_app(config_name=None):
     def root():
         """Root endpoint with API information"""
         return jsonify({
-            'name': 'IoT Device Connectivity Layer',
+            'name': 'SmartSense Device Connectivity Layer',
             'version': '1.0.0',
             'description': 'REST API for IoT device connectivity and telemetry data management',
             'endpoints': {
@@ -237,5 +237,5 @@ if __name__ == '__main__':
     host = os.environ.get('HOST', '0.0.0.0')
     debug = os.environ.get('DEBUG', 'False').lower() == 'true'
     
-    app.logger.info(f"Starting IoT Connectivity Layer on {host}:{port}")
+    app.logger.info(f"Starting SmartSense Connectivity Layer on {host}:{port}")
     app.run(host=host, port=port, debug=debug)

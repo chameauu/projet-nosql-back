@@ -5,6 +5,7 @@ Authentication routes
 from flask import Blueprint, request, jsonify, current_app
 from src.models import User, db
 from src.middleware.security import security_headers_middleware
+from src.middleware.event_logging import event_logger
 from datetime import datetime, timezone
 
 # Create blueprint for auth routes
@@ -91,6 +92,14 @@ def login():
         
         # Verify password
         if not user.check_password(password):
+            # Log failed login attempt
+            event_logger.log_user_event('login_failed', {
+                'user_id': user.user_id,
+                'username': user.username,
+                'success': False,
+                'reason': 'invalid_password'
+            })
+            
             return jsonify({
                 "error": "Authentication failed",
                 "message": "Invalid username or password"
@@ -99,6 +108,14 @@ def login():
         # Update last login
         user.last_login = datetime.now(timezone.utc)
         db.session.commit()
+        
+        # Log successful login event
+        event_logger.log_user_event('login', {
+            'user_id': user.user_id,
+            'username': user.username,
+            'email': user.email,
+            'success': True
+        })
         
         current_app.logger.info(f"User logged in: {username} (ID: {user.user_id})")
         
@@ -208,6 +225,13 @@ def register():
         
         db.session.add(user)
         db.session.commit()
+        
+        # Log user registration event
+        event_logger.log_user_event('registered', {
+            'user_id': user.user_id,
+            'username': user.username,
+            'email': user.email
+        })
         
         current_app.logger.info(f"User registered: {username} (ID: {user.user_id})")
         

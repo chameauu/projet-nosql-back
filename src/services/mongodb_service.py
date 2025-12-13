@@ -89,6 +89,22 @@ class MongoDBService:
             logger.error(f"Error logging event: {e}")
             return None
     
+    def log_bulk_events(self, events: List[Dict]) -> bool:
+        """Log multiple events efficiently"""
+        try:
+            if not events:
+                return True
+            
+            # Ensure all events have timestamps
+            for event in events:
+                event['timestamp'] = event.get('timestamp', datetime.now(timezone.utc))
+            
+            result = self.db.logs.insert_many(events)
+            return len(result.inserted_ids) == len(events)
+        except Exception as e:
+            logger.error(f"Error logging bulk events: {e}")
+            return False
+    
     def get_device_events(self, device_id: int, limit: int = 100) -> List[Dict]:
         """Get device events from logs"""
         try:

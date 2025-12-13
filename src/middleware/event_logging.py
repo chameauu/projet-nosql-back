@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from flask import request, g
 from typing import Dict, Optional, Any
 
-from services.mongodb_service import MongoDBService
+from src.services.mongodb_service import MongoDBService
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,74 @@ class EventLogger:
         if self._mongodb_service is None:
             self._mongodb_service = MongoDBService()
         return self._mongodb_service
+    
+    def log_user_event(self, action: str, user_data: Dict) -> bool:
+        """Log a user-related event"""
+        try:
+            event = {
+                'event_type': f'user.{action}',
+                'user_id': user_data.get('user_id'),
+                'timestamp': datetime.now(timezone.utc),
+                'source': 'api',
+                'details': {
+                    'username': user_data.get('username'),
+                    'email': user_data.get('email'),
+                    **{k: v for k, v in user_data.items() if k not in ['user_id']}
+                }
+            }
+            
+            result = self.mongodb_service.log_event(event)
+            return bool(result)
+        except Exception as e:
+            logger.error(f"Failed to log user event {action}: {e}")
+            return False
+    
+    def log_device_event(self, action: str, device_data: Dict) -> bool:
+        """Log a device-related event"""
+        try:
+            event = {
+                'event_type': f'device.{action}',
+                'device_id': device_data.get('device_id'),
+                'user_id': device_data.get('user_id'),
+                'timestamp': datetime.now(timezone.utc),
+                'source': 'api',
+                'details': {
+                    'device_name': device_data.get('name'),
+                    'device_type': device_data.get('device_type'),
+                    'location': device_data.get('location'),
+                    **{k: v for k, v in device_data.items() if k not in ['device_id', 'user_id']}
+                }
+            }
+            
+            result = self.mongodb_service.log_event(event)
+            return bool(result)
+        except Exception as e:
+            logger.error(f"Failed to log device event {action}: {e}")
+            return False
+    
+    def log_telemetry_event(self, action: str, telemetry_data: Dict) -> bool:
+        """Log a telemetry-related event"""
+        try:
+            data = telemetry_data.get('data', {})
+            event = {
+                'event_type': f'telemetry.{action}',
+                'device_id': telemetry_data.get('device_id'),
+                'user_id': telemetry_data.get('user_id'),
+                'timestamp': telemetry_data.get('timestamp', datetime.now(timezone.utc)),
+                'source': 'api',
+                'details': {
+                    'data_points': len(data) if isinstance(data, dict) else 0,
+                    'measurements': list(data.keys()) if isinstance(data, dict) else [],
+                    'data_size_bytes': len(str(data)),
+                    **{k: v for k, v in telemetry_data.items() if k not in ['device_id', 'user_id', 'data']}
+                }
+            }
+            
+            result = self.mongodb_service.log_event(event)
+            return bool(result)
+        except Exception as e:
+            logger.error(f"Failed to log telemetry event {action}: {e}")
+            return False
     
     def log_event(self, event_type: str, user_id: Optional[int] = None, 
                   device_id: Optional[int] = None, details: Optional[Dict] = None) -> bool:

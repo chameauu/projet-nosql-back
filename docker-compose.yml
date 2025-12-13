@@ -4,28 +4,28 @@ services:
   # PostgreSQL - Relational data (users, devices, groups)
   postgres:
     image: postgres:15
-    container_name: iotflow_postgres_nosql
+    container_name: smartsense_postgres_nosql
     environment:
-      POSTGRES_USER: iotflow
-      POSTGRES_PASSWORD: iotflowpass
-      POSTGRES_DB: iotflow
+      POSTGRES_USER: smartsense
+      POSTGRES_PASSWORD: smartsensepass
+      POSTGRES_DB: smartsense
     volumes:
       - ./instance/postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U iotflow"]  
+      test: ["CMD-SHELL", "pg_isready -U smartsense"]  
       interval: 10s
       retries: 5
     networks:
-      - iotflow-network
+      - smartsense-network
 
   # Cassandra - Time-series telemetry data
   cassandra:
     image: cassandra:4.1
-    container_name: iotflow_cassandra
+    container_name: smartsense_cassandra
     environment:
-      CASSANDRA_CLUSTER_NAME: IoTFlowCluster
+      CASSANDRA_CLUSTER_NAME: SmartSenseCluster
       CASSANDRA_DC: datacenter1
       CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
       CASSANDRA_SEEDS: cassandra
@@ -43,13 +43,13 @@ services:
       retries: 10
       start_period: 60s
     networks:
-      - iotflow-network
+      - smartsense-network
 
   # Redis - Caching and real-time data
   redis:
     image: redis:7-alpine
-    container_name: iotflow_redis
-    command: redis-server --appendonly yes --requirepass iotflowpass --maxmemory 256mb --maxmemory-policy allkeys-lru
+    container_name: smartsense_redis
+    command: redis-server --appendonly yes --requirepass smartsensepass --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - ./instance/redis_data:/data
     ports:
@@ -59,14 +59,14 @@ services:
       interval: 10s
       retries: 5
     networks:
-      - iotflow-network
+      - smartsense-network
 
   # MongoDB - Simplified document storage (logs, alerts only)
   mongodb:
     image: mongo:7.0
-    container_name: iotflow_mongodb
+    container_name: smartsense_mongodb
     environment:
-      MONGO_INITDB_DATABASE: iotflow
+      MONGO_INITDB_DATABASE: smartsense
     volumes:
       - ./instance/mongodb_data:/data/db
     ports:
@@ -76,12 +76,12 @@ services:
       interval: 10s
       retries: 5
     networks:
-      - iotflow-network
+      - smartsense-network
 
   # Optional: Cassandra Web UI for management
   cassandra-web:
     image: ipushc/cassandra-web:latest
-    container_name: iotflow_cassandra_web
+    container_name: smartsense_cassandra_web
     environment:
       CASSANDRA_HOST: cassandra
       CASSANDRA_PORT: 9042
@@ -90,29 +90,29 @@ services:
     depends_on:
       - cassandra
     networks:
-      - iotflow-network
+      - smartsense-network
     profiles:
       - tools
 
   # Optional: Redis Commander for Redis management
   redis-commander:
     image: rediscommander/redis-commander:latest
-    container_name: iotflow_redis_commander
+    container_name: smartsense_redis_commander
     environment:
-      REDIS_HOSTS: local:redis:6379:0:iotflowpass
+      REDIS_HOSTS: local:redis:6379:0:smartsensepass
     ports:
       - "8081:8081"
     depends_on:
       - redis
     networks:
-      - iotflow-network
+      - smartsense-network
     profiles:
       - tools
 
   # Optional: Mongo Express for MongoDB management
   mongo-express:
     image: mongo-express:latest
-    container_name: iotflow_mongo_express
+    container_name: smartsense_mongo_express
     environment:
       ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
       ME_CONFIG_BASICAUTH_USERNAME: admin
@@ -122,12 +122,12 @@ services:
     depends_on:
       - mongodb
     networks:
-      - iotflow-network
+      - smartsense-network
     profiles:
       - tools
 
 networks:
-  iotflow-network:
+  smartsense-network:
     driver: bridge
 
 volumes:
