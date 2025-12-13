@@ -152,10 +152,27 @@ def store_telemetry():
             redis_service.set_device_online(device.id)
             redis_service.update_last_seen(device.id)
 
-        # Update device last_seen in PostgreSQL
+        # AUTO-ACTIVATION FEATURE: Activate device if it's inactive
+        device_was_activated = False
+        previous_status = device.status
+        
+        if device.status == 'inactive':
+            # Auto-activate device when it sends telemetry
+            device.status = 'active'
+            device_was_activated = True
+            current_app.logger.info(f"Auto-activated device {device.name} (ID: {device.id}) from inactive to active")
+            
+            # Update Redis cache with new status
+            redis_service.cache_api_key(api_key, {
+                'device_id': device.id,
+                'user_id': device.user_id,
+                'status': 'active'  # Updated status
+            }, ttl=3600)
+
+        # Update device last_seen in PostgreSQL (this also commits the status change)
         device.update_last_seen()
 
-        # Log event to MongoDB (async, non-blocking)
+        # Log telemetry event to MongoDB (async, non-blocking)
         try:
             mongodb_service.log_event({
                 'event_type': 'telemetry.submitted',
@@ -168,7 +185,27 @@ def store_telemetry():
                 }
             })
         except Exception as e:
-            current_app.logger.warning(f"Failed to log event to MongoDB: {e}")
+            current_app.logger.warning(f"Failed to log telemetry event to MongoDB: {e}")
+
+        # Log device activation event to MongoDB if device was activated
+        if device_was_activated:
+            try:
+                mongodb_service.log_event({
+                    'event_type': 'device.activated',
+                    'device_id': device.id,
+                    'user_id': device.user_id,
+                    'timestamp': timestamp,
+                    'source': 'telemetry_auto_activation',
+                    'details': {
+                        'previous_status': previous_status,
+                        'new_status': 'active',
+                        'trigger': 'telemetry_submission',
+                        'device_name': device.name
+                    }
+                })
+                current_app.logger.info(f"Logged device activation event for {device.name} (ID: {device.id})")
+            except Exception as e:
+                current_app.logger.warning(f"Failed to log activation event to MongoDB: {e}")
 
         if cassandra_success:
             current_app.logger.info(f"Telemetry stored for device {device.name} (ID: {device.id})")

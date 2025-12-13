@@ -131,7 +131,7 @@ docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning keys 
 # Submit telemetry data using device API key
 curl -s -X POST http://localhost:5000/api/v1/telemetry \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: itKvICtSMTQBM1HMNh0ku4yMr4yRPrq6" \
+  -H "X-API-Key: jA0VN88hSPEhMZeYi7BEbtvrvb8W16aR" \
   -d '{
     "data": {
       "temperature": 25.8,
@@ -166,7 +166,7 @@ curl -s -X POST http://localhost:5000/api/v1/telemetry \
 ### Cassandra - Time-Series Data Storage
 ```bash
 # Verify telemetry data in Cassandra
-docker exec smartsense_cassandra cqlsh -e "SELECT device_id, timestamp, measurement_name, numeric_value FROM telemetry.device_data WHERE device_id = 2 ORDER BY timestamp DESC LIMIT 10;"
+docker exec smartsense_cassandra cqlsh -e "SELECT device_id, timestamp, measurement_name, numeric_value FROM telemetry.device_data WHERE device_id = 5 ORDER BY timestamp DESC LIMIT 10;"
 ```
 
 **Result**: ✅ 5 measurements stored
@@ -200,16 +200,29 @@ docker exec smartsense_mongodb mongosh smartsense --eval "db.logs.find({device_i
 }
 ```
 
-### Redis - Performance Caching
+### Redis - Performance Caching & Device Status
 ```bash
 # Check cache growth and device 2 data
 docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning keys "*" | wc -l
-docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning hgetall "telemetry:latest:2"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning hgetall "telemetry:latest:5"
+
+# Check if device is active/cached after auto-activation
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning exists "apikey:4I9RqiQdKPuF3wAlSGgDNJNhlJyZ3RcR"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning get "apikey:4I9RqiQdKPuF3wAlSGgDNJNhlJyZ3RcR"
+
+# Check online devices (auto-activation feature)
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning zrange "devices:online" 0 -1 WITHSCORES
+
+# Check device last seen (activity tracking)
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning get "device:lastseen:5"
 ```
 
-**Result**: ✅ Cache updated
-- **Cache keys**: Increased from 4 to 6 keys
+**Result**: ✅ Cache updated with auto-activation
+- **Cache keys**: Increased from 4 to 6+ keys
 - **Latest telemetry**: Device 2 values cached for fast access
+- **API key cached**: Device API key cached after auto-activation
+- **Online status**: Device marked as online in Redis
+- **Activity tracking**: Last seen timestamp updated
 - **API performance**: Sub-millisecond cache responses
 
 ### PostgreSQL - Device Status
@@ -297,6 +310,60 @@ The SmartSense platform has been successfully demonstrated with:
 
 ---
 
+## 🚀 Auto-Activation Feature Testing
+
+### Test Device Auto-Activation (TDD Implementation)
+```bash
+# 1. Check device status before telemetry (should be inactive)
+docker exec smartsense_postgres_nosql psql -U smartsense -d smartsense -c "SELECT id, name, status, last_seen FROM devices WHERE name = 'test';"
+
+# 2. Send telemetry to inactive device (triggers auto-activation)
+curl -s -X POST http://localhost:5000/api/v1/telemetry \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: itKvICtSMTQBM1HMNh0ku4yMr4yRPrq6" \
+  -d '{
+    "data": {
+      "temperature": 26.5,
+      "humidity": 70.0,
+      "pressure": 1014.0,
+      "light": 600,
+      "battery": 89.5
+    },
+    "metadata": {
+      "test": "auto_activation_feature"
+    }
+  }' | python -m json.tool
+
+# 3. Verify device is now active in PostgreSQL
+docker exec smartsense_postgres_nosql psql -U smartsense -d smartsense -c "SELECT id, name, status, last_seen FROM devices WHERE name = 'test';"
+
+# 4. Check activation event in MongoDB
+docker exec smartsense_mongodb mongosh smartsense --eval "db.logs.find({device_id: 2, event_type: 'device.activated'}).sort({timestamp: -1}).limit(1).pretty()"
+
+# 5. Verify device is cached in Redis (auto-activation caching)
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning exists "apikey:itKvICtSMTQBM1HMNh0ku4yMr4yRPrq6"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning hgetall "telemetry:latest:2"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning zrange "devices:online" 0 -1
+
+# 6. Test maintenance device (should NOT auto-activate)
+curl -s -X POST http://localhost:5000/api/v1/telemetry \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: maintenance_test_key_123456789" \
+  -d '{"data": {"temperature": 30.0}, "metadata": {"test": "maintenance_protection"}}' | python -m json.tool
+
+# 7. Verify maintenance device stays in maintenance
+docker exec smartsense_postgres_nosql psql -U smartsense -d smartsense -c "SELECT id, name, status FROM devices WHERE name = 'Maintenance Test Device';"
+```
+
+### Auto-Activation Results Summary
+- ✅ **Inactive → Active**: Device automatically activated on telemetry submission
+- ✅ **Event Logging**: `device.activated` event logged in MongoDB with full details
+- ✅ **Smart Caching**: Device API key and telemetry cached in Redis for performance
+- ✅ **Maintenance Protection**: Devices in maintenance mode remain unchanged
+- ✅ **Polyglot Persistence**: All 4 databases updated consistently
+
+---
+
 ## 📝 Additional Verification Commands
 
 ### Quick System Health Check
@@ -312,6 +379,37 @@ docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning keys 
 
 # API health
 curl -s http://localhost:5000/health
+```
+
+### Redis Auto-Activation Status Check
+```bash
+# Complete Redis verification for auto-activation feature
+echo "🔍 SMARTSENSE AUTO-ACTIVATION REDIS VERIFICATION"
+echo "================================================"
+
+# Check if devices are cached after auto-activation
+echo "🔑 API Key Cache Status:"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning exists "apikey:itKvICtSMTQBM1HMNh0ku4yMr4yRPrq6"
+
+echo "📈 Latest Telemetry Cache:"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning hgetall "telemetry:latest:2"
+
+echo "📊 Online Devices (Auto-Activation Tracking):"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning zrange "devices:online" 0 -1 WITHSCORES
+
+echo "⏰ Device Activity Tracking:"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning get "device:lastseen:2"
+
+echo "🔢 Total Cache Keys:"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning keys "*" | wc -l
+
+# Verify device status consistency
+echo "🔄 Cross-Database Status Verification:"
+echo "PostgreSQL Device Status:"
+docker exec smartsense_postgres_nosql psql -U smartsense -d smartsense -t -c "SELECT status FROM devices WHERE id = 2;"
+
+echo "Redis Cache Status:"
+docker exec smartsense_redis redis-cli -a smartsensepass --no-auth-warning get "apikey:itKvICtSMTQBM1HMNh0ku4yMr4yRPrq6" | grep -o '"status":"[^"]*"' || echo "Not cached"
 ```
 
 ### Performance Testing
