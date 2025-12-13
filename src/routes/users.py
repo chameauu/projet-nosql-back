@@ -361,6 +361,23 @@ def delete_user(user_id):
         if device_ids:
             DeviceGroupMember.query.filter(DeviceGroupMember.device_id.in_(device_ids)).delete(synchronize_session=False)
         
+        # Log deletion event to MongoDB before deleting
+        try:
+            mongodb_service.log_event({
+                'event_type': 'user.deleted',
+                'user_id': user.id,
+                'timestamp': datetime.now(timezone.utc),
+                'message': f'User account deleted by admin',
+                'details': {
+                    'username': username,
+                    'email': user.email,
+                    'devices_count': len(device_ids),
+                    'deleted_by': 'admin'
+                }
+            })
+        except Exception as e:
+            current_app.logger.warning(f"Failed to log deletion event to MongoDB: {e}")
+        
         # Now delete the user (devices will be deleted due to CASCADE foreign key)
         db.session.delete(user)
         db.session.commit()
